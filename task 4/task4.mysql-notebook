@@ -2,7 +2,7 @@
     "type": "MySQLNotebook",
     "version": "1.0",
     "caption": "Script",
-    "content": "use ecommerce;\n",
+    "content": "use ecommerce;\n\n-- Task 4: Aggregate Functions and Grouping\n\n-- 1. Basic Aggregate Functions\n-- Count total number of products\nSELECT COUNT(*) AS total_products FROM Products;\n\n-- Count total number of customers\nSELECT COUNT(*) AS total_customers FROM Customers;\n\n-- Calculate average product price\nSELECT AVG(product_price) AS average_price FROM Products;\n\n-- Find minimum and maximum product prices\nSELECT MIN(product_price) AS min_price, MAX(product_price) AS max_price FROM Products;\n\n-- Calculate total value of all products in inventory\nSELECT SUM(product_price) AS total_inventory_value FROM Products;\n\n-- 2. GROUP BY Clauses\n-- Count products by product type\nSELECT product_type_code, COUNT(*) AS product_count\nFROM Products\nGROUP BY product_type_code;\n\n-- Calculate average price by product type\nSELECT product_type_code, AVG(product_price) AS avg_price\nFROM Products\nGROUP BY product_type_code;\n\n-- Count products by supplier\nSELECT supplier_id, COUNT(*) AS products_supplied\nFROM Products\nGROUP BY supplier_id;\n\n-- Get min, max, and average prices by product type\nSELECT product_type_code, \n       MIN(product_price) AS min_price,\n       MAX(product_price) AS max_price,\n       AVG(product_price) AS avg_price,\n       COUNT(*) AS product_count\nFROM Products\nGROUP BY product_type_code;\n\n-- 3. HAVING Clauses\n-- Find product types with more than 2 products\nSELECT product_type_code, COUNT(*) AS product_count\nFROM Products\nGROUP BY product_type_code\nHAVING COUNT(*) > 2;\n\n-- Find product types with average price greater than 50\nSELECT product_type_code, AVG(product_price) AS avg_price\nFROM Products\nGROUP BY product_type_code\nHAVING AVG(product_price) > 50;\n\n-- Find suppliers supplying more than 3 products\nSELECT supplier_id, COUNT(*) AS products_supplied\nFROM Products\nGROUP BY supplier_id\nHAVING COUNT(*) > 3;\n\n-- Find product types with total inventory value over 200\nSELECT product_type_code, \n       SUM(product_price) AS total_value,\n       COUNT(*) AS product_count\nFROM Products\nGROUP BY product_type_code\nHAVING SUM(product_price) > 200;\n\n-- 4. Advanced Grouping with JOINs\n-- Count products by supplier with supplier details\nSELECT s.supplier_id, \n       s.supplier_name,\n       COUNT(p.product_id) AS products_supplied,\n       AVG(p.product_price) AS avg_product_price\nFROM Suppliers s\nLEFT JOIN Products p ON s.supplier_id = p.supplier_id\nGROUP BY s.supplier_id, s.supplier_name;\n\n-- Count addresses by address type\nSELECT rat.address_type_code,\n       rat.address_type_description,\n       COUNT(a.address_id) AS address_count\nFROM Ref_Address_Types rat\nLEFT JOIN Addresses a ON rat.address_type_code = a.address_type_code\nGROUP BY rat.address_type_code, rat.address_type_description;\n\n-- Count customers with addresses grouped by customer\nSELECT c.customer_id,\n       c.customer_name,\n       COUNT(a.address_id) AS address_count\nFROM Customers c\nLEFT JOIN Addresses a ON c.customer_id = a.customer_id\nGROUP BY c.customer_id, c.customer_name;\n\n-- 5. CASE Statements for Custom Categorization\n-- Categorize products by price range\nSELECT \n    CASE \n        WHEN product_price < 50 THEN 'Low'\n        WHEN product_price BETWEEN 50 AND 100 THEN 'Medium'\n        ELSE 'High'\n    END AS price_range,\n    COUNT(*) AS product_count,\n    AVG(product_price) AS avg_price\nFROM Products\nGROUP BY price_range;\n\n-- Calculate percentage of products by type\nSELECT product_type_code,\n       COUNT(*) AS product_count,\n       ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM Products)), 2) AS percentage\nFROM Products\nGROUP BY product_type_code;\n\n-- 6. Multi-column Grouping\n-- Group by supplier and product type\nSELECT supplier_id, \n       product_type_code,\n       COUNT(*) AS product_count,\n       AVG(product_price) AS avg_price,\n       SUM(product_price) AS total_value\nFROM Products\nGROUP BY supplier_id, product_type_code;\n\n-- 7. Complex Multi-table Aggregation\n-- Supplier analysis with total products and value\nSELECT s.supplier_id,\n       s.supplier_name,\n       COUNT(p.product_id) AS total_products,\n       COALESCE(SUM(p.product_price), 0) AS total_inventory_value,\n       COALESCE(AVG(p.product_price), 0) AS avg_product_price,\n       COALESCE(MIN(p.product_price), 0) AS min_price,\n       COALESCE(MAX(p.product_price), 0) AS max_price\nFROM Suppliers s\nLEFT JOIN Products p ON s.supplier_id = p.supplier_id\nGROUP BY s.supplier_id, s.supplier_name\nORDER BY total_inventory_value DESC;\n",
     "options": {
         "tabSize": 4,
         "indentSize": 4,
@@ -10,7 +10,33 @@
         "defaultEOL": "LF",
         "trimAutoWhitespace": true
     },
-    "viewState": null,
+    "viewState": {
+        "cursorState": [
+            {
+                "inSelectionMode": false,
+                "selectionStart": {
+                    "lineNumber": 5,
+                    "column": 32
+                },
+                "position": {
+                    "lineNumber": 5,
+                    "column": 32
+                }
+            }
+        ],
+        "viewState": {
+            "scrollLeft": 0,
+            "firstPosition": {
+                "lineNumber": 1,
+                "column": 1
+            },
+            "firstPositionDeltaTop": 0
+        },
+        "contributionsState": {
+            "editor.contrib.folding": {},
+            "editor.contrib.wordHighlighter": true
+        }
+    },
     "contexts": [
         {
             "state": {
@@ -31,7 +57,7 @@
                         "text": ""
                     }
                 },
-                "currentHeight": 300,
+                "currentHeight": 44.796875,
                 "currentSet": 1,
                 "statements": [
                     {
