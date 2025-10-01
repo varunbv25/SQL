@@ -1,0 +1,4530 @@
+{
+    "type": "MySQLNotebook",
+    "version": "1.0",
+    "caption": "DB Notebook",
+    "content": "\\about\nuse ecommerce;\nSELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_price > (SELECT AVG(product_price) FROM Products)\n  ORDER BY product_price DESC;\nSELECT customer_id, customer_name, customer_email\n  FROM Customers\n  WHERE customer_id IN (SELECT DISTINCT customer_id FROM Orders);\nSELECT COUNT(*) AS products_above_avg_price\n  FROM Products\n  WHERE product_price > (SELECT AVG(product_price) FROM Products);\nSELECT product_id, product_type_code, product_price, supplier_id\n  FROM Products\n  WHERE supplier_id IN (\n      SELECT supplier_id\n      FROM Products\n      GROUP BY supplier_id\n      HAVING COUNT(*) > 1\n  )\n  ORDER BY supplier_id;\nSELECT customer_id, customer_name\n  FROM Customers\n  WHERE customer_id IN (\n      SELECT DISTINCT ca1.customer_id\n      FROM Customer_Addresses ca1\n      INNER JOIN Addresses a1 ON ca1.address_id = a1.address_id\n      WHERE a1.city IN (\n          SELECT a2.city\n          FROM Customer_Addresses ca2\n          INNER JOIN Addresses a2 ON ca2.address_id = a2.address_id\n          GROUP BY a2.city\n          HAVING COUNT(DISTINCT ca2.customer_id) > 0\n      )\n  );\nSELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_id IN (SELECT DISTINCT product_id FROM Order_Items)\n  ORDER BY product_id;\nSELECT c.customer_id, c.customer_name, c.customer_email\n  FROM Customers c\n  WHERE EXISTS (\n      SELECT 1 FROM Orders o WHERE o.customer_id = c.customer_id\n  )\n  ORDER BY c.customer_name;\nSELECT s.supplier_id, s.supplier_name\n  FROM Suppliers s\n  WHERE EXISTS (\n      SELECT 1 FROM Products p\n      WHERE p.supplier_id = s.supplier_id\n      AND p.product_price > 200\n  );\nSELECT p.product_id, p.product_type_code, p.product_price\n  FROM Products p\n  WHERE NOT EXISTS (\n      SELECT 1 FROM Order_Items oi WHERE oi.product_id = p.product_id\n  );\nSELECT c.customer_id, c.customer_name\n  FROM Customers c\n  WHERE EXISTS (\n      SELECT 1 FROM Customer_Addresses ca WHERE ca.customer_id = c.customer_id\n  )\n  ORDER BY c.customer_name;\nSELECT p.product_id, p.product_type_code, p.product_price\n  FROM Products p\n  WHERE p.product_price > (\n      SELECT AVG(p2.product_price)\n      FROM Products p2\n      WHERE p2.product_type_code = p.product_type_code\n  )\n  ORDER BY p.product_type_code, p.product_price DESC;\nSELECT c.customer_id, c.customer_name,\n         (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) AS order_count\n  FROM Customers c\n  WHERE (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) >\n        (SELECT AVG(order_count)\n         FROM (SELECT customer_id, COUNT(*) AS order_count FROM Orders GROUP BY customer_id) AS subq)\n  ORDER BY order_count DESC;\nSELECT p.product_id, p.product_type_code, p.product_price, p.supplier_id\n  FROM Products p\n  WHERE p.supplier_id IN (\n      SELECT supplier_id\n      FROM Products p2\n      GROUP BY supplier_id\n      HAVING AVG(p2.product_price) > (SELECT AVG(product_price) FROM Products)\n  );\nSELECT p1.supplier_id, p1.product_id, p1.product_type_code, p1.product_price\n  FROM Products p1\n  WHERE p1.product_price = (\n      SELECT MAX(p2.product_price)\n      FROM Products p2\n      WHERE p2.supplier_id = p1.supplier_id\n  )\n  ORDER BY p1.supplier_id;\nSELECT c.customer_id,\n         c.customer_name,\n         c.customer_email,\n         (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) AS total_orders\n  FROM Customers c\n  ORDER BY total_orders DESC, c.customer_name;\nSELECT p.product_id,\n         p.product_type_code,\n         p.product_price,\n         (SELECT COUNT(*) FROM Order_Items oi WHERE oi.product_id = p.product_id) AS times_ordered,\n         (SELECT COALESCE(SUM(oi.quantity), 0) FROM Order_Items oi WHERE oi.product_id = p.product_id) AS total_quantity_sold\n  FROM Products p\n  ORDER BY times_ordered DESC;\nSELECT s.supplier_id,\n         s.supplier_name,\n         (SELECT COUNT(*) FROM Products p WHERE p.supplier_id = s.supplier_id) AS product_count,\n         (SELECT COALESCE(AVG(p.product_price), 0) FROM Products p WHERE p.supplier_id = s.supplier_id) AS avg_product_price\n  FROM Suppliers s\n  ORDER BY product_count DESC;\nSELECT c.customer_id,\n         c.customer_name,\n         (SELECT COALESCE(SUM(oi.quantity * oi.item_price), 0)\n          FROM Orders o\n          INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n          WHERE o.customer_id = c.customer_id) AS total_spent\n  FROM Customers c\n  ORDER BY total_spent DESC;\nSELECT price_category, COUNT(*) AS product_count, AVG(product_price) AS avg_price\n  FROM (\n      SELECT product_id,\n             product_price,\n             CASE\n                 WHEN product_price < 50 THEN 'Budget'\n                 WHEN product_price BETWEEN 50 AND 200 THEN 'Mid-Range'\n                 ELSE 'Premium'\n             END AS price_category\n      FROM Products\n  ) AS categorized_products\n  GROUP BY price_category\n  ORDER BY avg_price;\nSELECT customer_name, total_spent\n  FROM (\n      SELECT c.customer_id,\n             c.customer_name,\n             COALESCE(SUM(oi.quantity * oi.item_price), 0) AS total_spent\n      FROM Customers c\n      LEFT JOIN Orders o ON c.customer_id = o.customer_id\n      LEFT JOIN Order_Items oi ON o.order_id = oi.order_id\n      GROUP BY c.customer_id, c.customer_name\n  ) AS customer_spending\n  WHERE total_spent > 0\n  ORDER BY total_spent DESC;\nSELECT supplier_name, total_products, total_value, avg_price\n  FROM (\n      SELECT s.supplier_id,\n             s.supplier_name,\n             COUNT(p.product_id) AS total_products,\n             COALESCE(SUM(p.product_price), 0) AS total_value,\n             COALESCE(AVG(p.product_price), 0) AS avg_price\n      FROM Suppliers s\n      LEFT JOIN Products p ON s.supplier_id = p.supplier_id\n      GROUP BY s.supplier_id, s.supplier_name\n  ) AS supplier_stats\n  WHERE total_products > 0\n  ORDER BY total_value DESC;\nSELECT order_month, customer_count, total_orders, avg_order_value\n  FROM (\n      SELECT DATE_FORMAT(o.order_date, '%Y-%m') AS order_month,\n             COUNT(DISTINCT o.customer_id) AS customer_count,\n             COUNT(o.order_id) AS total_orders,\n             AVG(order_totals.order_total) AS avg_order_value\n      FROM Orders o\n      INNER JOIN (\n          SELECT order_id, SUM(quantity * item_price) AS order_total\n          FROM Order_Items\n          GROUP BY order_id\n      ) AS order_totals ON o.order_id = order_totals.order_id\n      GROUP BY DATE_FORMAT(o.order_date, '%Y-%m')\n  ) AS monthly_summary\n  ORDER BY order_month;\nSELECT product_id, product_type_code, product_price, supplier_id\n  FROM Products\n  WHERE product_price > ALL (\n      SELECT product_price FROM Products WHERE supplier_id = 3\n  )\n  ORDER BY product_price;\nSELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_price < ANY (\n      SELECT product_price FROM Products WHERE product_type_code = 'ELECTRONICS'\n  )\n  AND product_type_code != 'ELECTRONICS'\n  ORDER BY product_price;\nSELECT c.customer_id, c.customer_name, supplier_count\n  FROM Customers c\n  INNER JOIN (\n      SELECT o.customer_id, COUNT(DISTINCT p.supplier_id) AS supplier_count\n      FROM Orders o\n      INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n      INNER JOIN Products p ON oi.product_id = p.product_id\n      GROUP BY o.customer_id\n      HAVING COUNT(DISTINCT p.supplier_id) > 1\n  ) AS multi_supplier_customers ON c.customer_id = multi_supplier_customers.customer_id\n  ORDER BY supplier_count DESC;\nSELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_price = (\n      SELECT MAX(product_price)\n      FROM Products\n      WHERE product_price < (SELECT MAX(product_price) FROM Products)\n  );\nSELECT p1.product_id, p1.product_type_code, p1.product_price\n  FROM Products p1\n  WHERE p1.product_price = (\n      SELECT MAX(p2.product_price)\n      FROM Products p2\n      WHERE p2.product_type_code = p1.product_type_code\n  );\nSELECT c.customer_id, c.customer_name, customer_total\n  FROM Customers c\n  INNER JOIN (\n      SELECT o.customer_id, SUM(oi.quantity * oi.item_price) AS customer_total\n      FROM Orders o\n      INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n      GROUP BY o.customer_id\n  ) AS customer_totals ON c.customer_id = customer_totals.customer_id\n  WHERE customer_total > (\n      SELECT AVG(total)\n      FROM (\n          SELECT o.customer_id, SUM(oi.quantity * oi.item_price) AS total\n          FROM Orders o\n          INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n          GROUP BY o.customer_id\n      ) AS avg_spending\n  )\n  ORDER BY customer_total DESC;\nSELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_id IN (SELECT DISTINCT product_id FROM Order_Items)\n  ORDER BY product_price DESC\n  LIMIT 3;\nSELECT customer_id, customer_name,\n         (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) AS order_count\n  FROM Customers c\n  WHERE EXISTS (SELECT 1 FROM Orders o WHERE o.customer_id = c.customer_id)\n  ORDER BY order_count DESC\n  LIMIT 3;\nSELECT p.product_id, p.product_type_code, p.product_price,\n         COALESCE((SELECT SUM(quantity) FROM Order_Items oi WHERE oi.product_id = p.product_id), 0) AS units_sold\n  FROM Products p\n  WHERE COALESCE((SELECT SUM(quantity) FROM Order_Items oi WHERE oi.product_id = p.product_id), 0) <\n        (SELECT AVG(total_qty)\n         FROM (SELECT product_id, SUM(quantity) AS total_qty FROM Order_Items GROUP BY product_id) AS product_sales)\n        OR NOT EXISTS (SELECT 1 FROM Order_Items oi WHERE oi.product_id = p.product_id)\n  ORDER BY units_sold;\nWITH customer_spending AS (\n    SELECT o.customer_id, SUM(oi.quantity * oi.item_price) AS total_spending\n    FROM Orders o\n    INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n    GROUP BY o.customer_id\n),\nranked_spending AS (\n    SELECT \n        total_spending,\n        PERCENT_RANK() OVER (ORDER BY total_spending) AS percentile\n    FROM customer_spending\n)\nSELECT c.customer_id, c.customer_name, cs.total_spending\nFROM Customers c\nINNER JOIN customer_spending cs ON c.customer_id = cs.customer_id\nWHERE cs.total_spending >= (\n    SELECT MIN(total_spending)\n    FROM ranked_spending\n    WHERE percentile >= 0.75\n)\nORDER BY cs.total_spending DESC;\nSELECT product_id, product_type_code, product_price,\n         ROUND(product_price * 0.3, 2) AS estimated_profit\n  FROM Products\n  WHERE product_price * 0.3 > (\n      SELECT AVG(product_price * 0.3) FROM Products\n  )\n  ORDER BY estimated_profit DESC;\n",
+    "options": {
+        "tabSize": 4,
+        "indentSize": 4,
+        "insertSpaces": true,
+        "defaultEOL": "LF",
+        "trimAutoWhitespace": true
+    },
+    "viewState": {
+        "cursorState": [
+            {
+                "inSelectionMode": false,
+                "selectionStart": {
+                    "lineNumber": 278,
+                    "column": 1
+                },
+                "position": {
+                    "lineNumber": 278,
+                    "column": 1
+                }
+            }
+        ],
+        "viewState": {
+            "scrollLeft": 0,
+            "firstPosition": {
+                "lineNumber": 271,
+                "column": 1
+            },
+            "firstPositionDeltaTop": 33
+        },
+        "contributionsState": {
+            "editor.contrib.folding": {},
+            "editor.contrib.wordHighlighter": false
+        }
+    },
+    "contexts": [
+        {
+            "state": {
+                "start": 1,
+                "end": 1,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "content": "Welcome to the MySQL Shell - DB Notebook.\n\nPress Ctrl+Enter to execute the code block.\n\nExecute \\sql to switch to SQL, \\js to JavaScript and \\ts to TypeScript mode.\nExecute \\help or \\? for help;",
+                            "language": "ansi"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 6
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 2,
+                "end": 2,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 0,
+                            "resultId": "7c91983d-aa3f-42de-c8e7-db93682ba44f",
+                            "content": "OK, 0 records retrieved in 0.534ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 14
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 14,
+                            "length": 0
+                        },
+                        "contentStart": 13,
+                        "state": 3
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 3,
+                "end": 6,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "a60abe3a-c125-462a-8819-76f15bc63c56"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 164
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "a60abe3a-c125-462a-8819-76f15bc63c56",
+                    "rows": [
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00"
+                        },
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 7.855ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_price > (SELECT AVG(product_price) FROM Products)\n  ORDER BY product_price DESC",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 7,
+                "end": 9,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "beed6dc3-f0fc-43c4-8cf7-e24d26dcfcb7"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 132
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "beed6dc3-f0fc-43c4-8cf7-e24d26dcfcb7",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": "john.smith@email.com"
+                        },
+                        {
+                            "0": 2,
+                            "1": "Sarah Johnson",
+                            "2": "sarah.j@gmail.com"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": "mbrown@newcompany.com"
+                        },
+                        {
+                            "0": 5,
+                            "1": "David Lee",
+                            "2": "david.lee@techstart.com"
+                        },
+                        {
+                            "0": 6,
+                            "1": "Lisa Chen",
+                            "2": "lisa.chen@university.edu"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_email",
+                            "field": "2",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 5 records retrieved in 4.311ms"
+                    },
+                    "totalRowCount": 5,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT customer_id, customer_name, customer_email\n  FROM Customers\n  WHERE customer_id IN (SELECT DISTINCT customer_id FROM Orders)",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 10,
+                "end": 12,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "4e7e9e78-64b5-4e9f-f891-5355baea5937"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 126
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "4e7e9e78-64b5-4e9f-f891-5355baea5937",
+                    "rows": [
+                        {
+                            "0": 3
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "products_above_avg_price",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 0.974ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT COUNT(*) AS products_above_avg_price\n  FROM Products\n  WHERE product_price > (SELECT AVG(product_price) FROM Products)",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 13,
+                "end": 21,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "0d072f14-f379-40af-f011-7d377898c528"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 231
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "0d072f14-f379-40af-f011-7d377898c528",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99",
+                            "3": 1
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99",
+                            "3": 1
+                        },
+                        {
+                            "0": 3,
+                            "1": "BOOKS",
+                            "2": "24.99",
+                            "3": 3
+                        },
+                        {
+                            "0": 10,
+                            "1": "BOOKS",
+                            "2": "19.99",
+                            "3": 3
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "supplier_id",
+                            "field": "3",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 4 records retrieved in 1.21ms"
+                    },
+                    "totalRowCount": 4,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price, supplier_id\n  FROM Products\n  WHERE supplier_id IN (\n      SELECT supplier_id\n      FROM Products\n      GROUP BY supplier_id\n      HAVING COUNT(*) > 1\n  )\n  ORDER BY supplier_id",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 22,
+                "end": 35,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "4f75a83c-8f7f-4420-ddca-b692862d9dc9"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 460
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "4f75a83c-8f7f-4420-ddca-b692862d9dc9",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith"
+                        },
+                        {
+                            "0": 2,
+                            "1": "Sarah Johnson"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown"
+                        },
+                        {
+                            "0": 4,
+                            "1": "Emma Wilson"
+                        },
+                        {
+                            "0": 5,
+                            "1": "David Lee"
+                        },
+                        {
+                            "0": 6,
+                            "1": "Lisa Chen"
+                        },
+                        {
+                            "0": 7,
+                            "1": "Robert Garcia"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 1.27ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT customer_id, customer_name\n  FROM Customers\n  WHERE customer_id IN (\n      SELECT DISTINCT ca1.customer_id\n      FROM Customer_Addresses ca1\n      INNER JOIN Addresses a1 ON ca1.address_id = a1.address_id\n      WHERE a1.city IN (\n          SELECT a2.city\n          FROM Customer_Addresses ca2\n          INNER JOIN Addresses a2 ON ca2.address_id = a2.address_id\n          GROUP BY a2.city\n          HAVING COUNT(DISTINCT ca2.customer_id) > 0\n      )\n  )",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 36,
+                "end": 39,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "aca55cc6-5248-4cd8-edb2-94f1f1225728"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 158
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "aca55cc6-5248-4cd8-edb2-94f1f1225728",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99"
+                        },
+                        {
+                            "0": 2,
+                            "1": "CLOTHING",
+                            "2": "79.95"
+                        },
+                        {
+                            "0": 3,
+                            "1": "BOOKS",
+                            "2": "24.99"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00"
+                        },
+                        {
+                            "0": 5,
+                            "1": "SPORTS",
+                            "2": "129.99"
+                        },
+                        {
+                            "0": 6,
+                            "1": "KITCHEN",
+                            "2": "89.50"
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99"
+                        },
+                        {
+                            "0": 10,
+                            "1": "BOOKS",
+                            "2": "19.99"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 8 records retrieved in 1.097ms"
+                    },
+                    "totalRowCount": 8,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_id IN (SELECT DISTINCT product_id FROM Order_Items)\n  ORDER BY product_id",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 40,
+                "end": 45,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "9d97b0f5-6756-4320-8796-a901638c82db"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 188
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "9d97b0f5-6756-4320-8796-a901638c82db",
+                    "rows": [
+                        {
+                            "0": 5,
+                            "1": "David Lee",
+                            "2": "david.lee@techstart.com"
+                        },
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": "john.smith@email.com"
+                        },
+                        {
+                            "0": 6,
+                            "1": "Lisa Chen",
+                            "2": "lisa.chen@university.edu"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": "mbrown@newcompany.com"
+                        },
+                        {
+                            "0": 2,
+                            "1": "Sarah Johnson",
+                            "2": "sarah.j@gmail.com"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_email",
+                            "field": "2",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 5 records retrieved in 1.341ms"
+                    },
+                    "totalRowCount": 5,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT c.customer_id, c.customer_name, c.customer_email\n  FROM Customers c\n  WHERE EXISTS (\n      SELECT 1 FROM Orders o WHERE o.customer_id = c.customer_id\n  )\n  ORDER BY c.customer_name",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 46,
+                "end": 52,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "cc14903e-2a4e-49be-b471-81437bb03607"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 183
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "cc14903e-2a4e-49be-b471-81437bb03607",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "TechCorp Electronics"
+                        },
+                        {
+                            "0": 4,
+                            "1": "HomeComfort Inc"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "supplier_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "supplier_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 2 records retrieved in 2.607ms"
+                    },
+                    "totalRowCount": 2,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT s.supplier_id, s.supplier_name\n  FROM Suppliers s\n  WHERE EXISTS (\n      SELECT 1 FROM Products p\n      WHERE p.supplier_id = s.supplier_id\n      AND p.product_price > 200\n  )",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 53,
+                "end": 57,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "ee84d801-9f11-4105-fc43-a37b7e06e78d"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 171
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "ee84d801-9f11-4105-fc43-a37b7e06e78d",
+                    "rows": [
+                        {
+                            "0": 8,
+                            "1": "ECO",
+                            "2": "34.75"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 0.901ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT p.product_id, p.product_type_code, p.product_price\n  FROM Products p\n  WHERE NOT EXISTS (\n      SELECT 1 FROM Order_Items oi WHERE oi.product_id = p.product_id\n  )",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 58,
+                "end": 63,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "57e358b0-9f21-42ce-e60f-8e1ec6d5675b"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 184
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "57e358b0-9f21-42ce-e60f-8e1ec6d5675b",
+                    "rows": [
+                        {
+                            "0": 5,
+                            "1": "David Lee"
+                        },
+                        {
+                            "0": 4,
+                            "1": "Emma Wilson"
+                        },
+                        {
+                            "0": 1,
+                            "1": "John Smith"
+                        },
+                        {
+                            "0": 6,
+                            "1": "Lisa Chen"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown"
+                        },
+                        {
+                            "0": 7,
+                            "1": "Robert Garcia"
+                        },
+                        {
+                            "0": 2,
+                            "1": "Sarah Johnson"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 1.267ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT c.customer_id, c.customer_name\n  FROM Customers c\n  WHERE EXISTS (\n      SELECT 1 FROM Customer_Addresses ca WHERE ca.customer_id = c.customer_id\n  )\n  ORDER BY c.customer_name",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 64,
+                "end": 71,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "edbfef50-5133-4a41-ccc0-ff1f44a3b3b3"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 274
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "edbfef50-5133-4a41-ccc0-ff1f44a3b3b3",
+                    "rows": [
+                        {
+                            "0": 3,
+                            "1": "BOOKS",
+                            "2": "24.99"
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 2 records retrieved in 1.24ms"
+                    },
+                    "totalRowCount": 2,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT p.product_id, p.product_type_code, p.product_price\n  FROM Products p\n  WHERE p.product_price > (\n      SELECT AVG(p2.product_price)\n      FROM Products p2\n      WHERE p2.product_type_code = p.product_type_code\n  )\n  ORDER BY p.product_type_code, p.product_price DESC",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 72,
+                "end": 78,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "f7e7bb19-2526-486e-9709-29c003b54789"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 391
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "f7e7bb19-2526-486e-9709-29c003b54789",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": 2
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "order_count",
+                            "field": "2",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 2.017ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT c.customer_id, c.customer_name,\n         (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) AS order_count\n  FROM Customers c\n  WHERE (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) >\n        (SELECT AVG(order_count)\n         FROM (SELECT customer_id, COUNT(*) AS order_count FROM Orders GROUP BY customer_id) AS subq)\n  ORDER BY order_count DESC",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 79,
+                "end": 86,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "5239f8ea-73ec-44f4-861e-d9e08950a76f"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 276
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "5239f8ea-73ec-44f4-861e-d9e08950a76f",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99",
+                            "3": 1
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00",
+                            "3": 4
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99",
+                            "3": 1
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "supplier_id",
+                            "field": "3",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 1.173ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT p.product_id, p.product_type_code, p.product_price, p.supplier_id\n  FROM Products p\n  WHERE p.supplier_id IN (\n      SELECT supplier_id\n      FROM Products p2\n      GROUP BY supplier_id\n      HAVING AVG(p2.product_price) > (SELECT AVG(product_price) FROM Products)\n  )",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 87,
+                "end": 94,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "c4e50c27-7e22-4382-8aed-d3423e3575ae"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 257
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "c4e50c27-7e22-4382-8aed-d3423e3575ae",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": 9,
+                            "2": "ELECTRONICS",
+                            "3": "659.99"
+                        },
+                        {
+                            "0": 2,
+                            "1": 2,
+                            "2": "CLOTHING",
+                            "3": "79.95"
+                        },
+                        {
+                            "0": 3,
+                            "1": 3,
+                            "2": "BOOKS",
+                            "3": "24.99"
+                        },
+                        {
+                            "0": 4,
+                            "1": 4,
+                            "2": "FURNITURE",
+                            "3": "449.00"
+                        },
+                        {
+                            "0": 5,
+                            "1": 5,
+                            "2": "SPORTS",
+                            "3": "129.99"
+                        },
+                        {
+                            "0": 6,
+                            "1": 6,
+                            "2": "KITCHEN",
+                            "3": "89.50"
+                        },
+                        {
+                            "0": 8,
+                            "1": 8,
+                            "2": "ECO",
+                            "3": "34.75"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "supplier_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_id",
+                            "field": "1",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "2",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "3",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 0.984ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT p1.supplier_id, p1.product_id, p1.product_type_code, p1.product_price\n  FROM Products p1\n  WHERE p1.product_price = (\n      SELECT MAX(p2.product_price)\n      FROM Products p2\n      WHERE p2.supplier_id = p1.supplier_id\n  )\n  ORDER BY p1.supplier_id",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 95,
+                "end": 100,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "6c1ada88-3f07-4af0-ed23-f26996fc8fc8"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 233
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "6c1ada88-3f07-4af0-ed23-f26996fc8fc8",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": "john.smith@email.com",
+                            "3": 2
+                        },
+                        {
+                            "0": 5,
+                            "1": "David Lee",
+                            "2": "david.lee@techstart.com",
+                            "3": 1
+                        },
+                        {
+                            "0": 6,
+                            "1": "Lisa Chen",
+                            "2": "lisa.chen@university.edu",
+                            "3": 1
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": "mbrown@newcompany.com",
+                            "3": 1
+                        },
+                        {
+                            "0": 2,
+                            "1": "Sarah Johnson",
+                            "2": "sarah.j@gmail.com",
+                            "3": 1
+                        },
+                        {
+                            "0": 4,
+                            "1": "Emma Wilson",
+                            "2": "emma.wilson@outlook.com",
+                            "3": 0
+                        },
+                        {
+                            "0": 9,
+                            "1": "James Wilson",
+                            "2": "j.wilson@corporate.net",
+                            "3": 0
+                        },
+                        {
+                            "0": 7,
+                            "1": "Robert Garcia",
+                            "2": "rgarcia@fitness.com",
+                            "3": 0
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_email",
+                            "field": "2",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_orders",
+                            "field": "3",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 8 records retrieved in 0.924ms"
+                    },
+                    "totalRowCount": 8,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT c.customer_id,\n         c.customer_name,\n         c.customer_email,\n         (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) AS total_orders\n  FROM Customers c\n  ORDER BY total_orders DESC, c.customer_name",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 101,
+                "end": 107,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "f977ac70-74a7-41b6-ddc5-9a44180215f8"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 351
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "f977ac70-74a7-41b6-ddc5-9a44180215f8",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99",
+                            "3": 1,
+                            "4": "1"
+                        },
+                        {
+                            "0": 2,
+                            "1": "CLOTHING",
+                            "2": "79.95",
+                            "3": 1,
+                            "4": "3"
+                        },
+                        {
+                            "0": 3,
+                            "1": "BOOKS",
+                            "2": "24.99",
+                            "3": 1,
+                            "4": "2"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00",
+                            "3": 1,
+                            "4": "1"
+                        },
+                        {
+                            "0": 5,
+                            "1": "SPORTS",
+                            "2": "129.99",
+                            "3": 1,
+                            "4": "2"
+                        },
+                        {
+                            "0": 6,
+                            "1": "KITCHEN",
+                            "2": "89.50",
+                            "3": 1,
+                            "4": "1"
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99",
+                            "3": 1,
+                            "4": "1"
+                        },
+                        {
+                            "0": 10,
+                            "1": "BOOKS",
+                            "2": "19.99",
+                            "3": 1,
+                            "4": "1"
+                        },
+                        {
+                            "0": 8,
+                            "1": "ECO",
+                            "2": "34.75",
+                            "3": 0,
+                            "4": "0"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "times_ordered",
+                            "field": "3",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_quantity_sold",
+                            "field": "4",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 9 records retrieved in 1.37ms"
+                    },
+                    "totalRowCount": 9,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT p.product_id,\n         p.product_type_code,\n         p.product_price,\n         (SELECT COUNT(*) FROM Order_Items oi WHERE oi.product_id = p.product_id) AS times_ordered,\n         (SELECT COALESCE(SUM(oi.quantity), 0) FROM Order_Items oi WHERE oi.product_id = p.product_id) AS total_quantity_sold\n  FROM Products p\n  ORDER BY times_ordered DESC",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 108,
+                "end": 113,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "55216853-71ea-4ef6-f306-d36cb1d62a84"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 319
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "55216853-71ea-4ef6-f306-d36cb1d62a84",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "TechCorp Electronics",
+                            "2": 2,
+                            "3": "494.990000"
+                        },
+                        {
+                            "0": 3,
+                            "1": "BookWorld Publishing",
+                            "2": 2,
+                            "3": "22.490000"
+                        },
+                        {
+                            "0": 2,
+                            "1": "Global Fashion Ltd",
+                            "2": 1,
+                            "3": "79.950000"
+                        },
+                        {
+                            "0": 4,
+                            "1": "HomeComfort Inc",
+                            "2": 1,
+                            "3": "449.000000"
+                        },
+                        {
+                            "0": 5,
+                            "1": "Sports Equipment Co",
+                            "2": 1,
+                            "3": "129.990000"
+                        },
+                        {
+                            "0": 6,
+                            "1": "Kitchen Essentials Ltd",
+                            "2": 1,
+                            "3": "89.500000"
+                        },
+                        {
+                            "0": 8,
+                            "1": "Eco-Friendly Products",
+                            "2": 1,
+                            "3": "34.750000"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "supplier_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "supplier_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_count",
+                            "field": "2",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "avg_product_price",
+                            "field": "3",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 0.879ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT s.supplier_id,\n         s.supplier_name,\n         (SELECT COUNT(*) FROM Products p WHERE p.supplier_id = s.supplier_id) AS product_count,\n         (SELECT COALESCE(AVG(p.product_price), 0) FROM Products p WHERE p.supplier_id = s.supplier_id) AS avg_product_price\n  FROM Suppliers s\n  ORDER BY product_count DESC",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 114,
+                "end": 121,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "108f2e68-8e19-4f33-b773-d117ce96b165"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 308
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "108f2e68-8e19-4f33-b773-d117ce96b165",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": "1039.96"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": "449.00"
+                        },
+                        {
+                            "0": 5,
+                            "1": "David Lee",
+                            "2": "349.48"
+                        },
+                        {
+                            "0": 2,
+                            "1": "Sarah Johnson",
+                            "2": "239.85"
+                        },
+                        {
+                            "0": 6,
+                            "1": "Lisa Chen",
+                            "2": "19.99"
+                        },
+                        {
+                            "0": 4,
+                            "1": "Emma Wilson",
+                            "2": "0.00"
+                        },
+                        {
+                            "0": 7,
+                            "1": "Robert Garcia",
+                            "2": "0.00"
+                        },
+                        {
+                            "0": 9,
+                            "1": "James Wilson",
+                            "2": "0.00"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_spent",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 8 records retrieved in 1.167ms"
+                    },
+                    "totalRowCount": 8,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT c.customer_id,\n         c.customer_name,\n         (SELECT COALESCE(SUM(oi.quantity * oi.item_price), 0)\n          FROM Orders o\n          INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n          WHERE o.customer_id = c.customer_id) AS total_spent\n  FROM Customers c\n  ORDER BY total_spent DESC",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 122,
+                "end": 134,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "4860aee0-30db-451a-cb0f-fbf282487ed5"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 451
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "4860aee0-30db-451a-cb0f-fbf282487ed5",
+                    "rows": [
+                        {
+                            "0": "Budget",
+                            "1": 3,
+                            "2": "26.576667"
+                        },
+                        {
+                            "0": "Mid-Range",
+                            "1": 3,
+                            "2": "99.813333"
+                        },
+                        {
+                            "0": "Premium",
+                            "1": 3,
+                            "2": "479.660000"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "price_category",
+                            "field": "0",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_count",
+                            "field": "1",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "avg_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 3.932ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT price_category, COUNT(*) AS product_count, AVG(product_price) AS avg_price\n  FROM (\n      SELECT product_id,\n             product_price,\n             CASE\n                 WHEN product_price < 50 THEN 'Budget'\n                 WHEN product_price BETWEEN 50 AND 200 THEN 'Mid-Range'\n                 ELSE 'Premium'\n             END AS price_category\n      FROM Products\n  ) AS categorized_products\n  GROUP BY price_category\n  ORDER BY avg_price",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 135,
+                "end": 146,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "a2866122-2b6a-431b-f4c0-55eef1840914"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 438
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "a2866122-2b6a-431b-f4c0-55eef1840914",
+                    "rows": [
+                        {
+                            "0": "John Smith",
+                            "1": "1039.96"
+                        },
+                        {
+                            "0": "Michael Brown",
+                            "1": "449.00"
+                        },
+                        {
+                            "0": "David Lee",
+                            "1": "349.48"
+                        },
+                        {
+                            "0": "Sarah Johnson",
+                            "1": "239.85"
+                        },
+                        {
+                            "0": "Lisa Chen",
+                            "1": "19.99"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_name",
+                            "field": "0",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_spent",
+                            "field": "1",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 5 records retrieved in 1.91ms"
+                    },
+                    "totalRowCount": 5,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT customer_name, total_spent\n  FROM (\n      SELECT c.customer_id,\n             c.customer_name,\n             COALESCE(SUM(oi.quantity * oi.item_price), 0) AS total_spent\n      FROM Customers c\n      LEFT JOIN Orders o ON c.customer_id = o.customer_id\n      LEFT JOIN Order_Items oi ON o.order_id = oi.order_id\n      GROUP BY c.customer_id, c.customer_name\n  ) AS customer_spending\n  WHERE total_spent > 0\n  ORDER BY total_spent DESC",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 147,
+                "end": 159,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "bf58576a-134f-4e72-902e-636edc95f9b0"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 509
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "bf58576a-134f-4e72-902e-636edc95f9b0",
+                    "rows": [
+                        {
+                            "0": "TechCorp Electronics",
+                            "1": 2,
+                            "2": "989.98",
+                            "3": "494.990000"
+                        },
+                        {
+                            "0": "HomeComfort Inc",
+                            "1": 1,
+                            "2": "449.00",
+                            "3": "449.000000"
+                        },
+                        {
+                            "0": "Sports Equipment Co",
+                            "1": 1,
+                            "2": "129.99",
+                            "3": "129.990000"
+                        },
+                        {
+                            "0": "Kitchen Essentials Ltd",
+                            "1": 1,
+                            "2": "89.50",
+                            "3": "89.500000"
+                        },
+                        {
+                            "0": "Global Fashion Ltd",
+                            "1": 1,
+                            "2": "79.95",
+                            "3": "79.950000"
+                        },
+                        {
+                            "0": "BookWorld Publishing",
+                            "1": 2,
+                            "2": "44.98",
+                            "3": "22.490000"
+                        },
+                        {
+                            "0": "Eco-Friendly Products",
+                            "1": 1,
+                            "2": "34.75",
+                            "3": "34.750000"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "supplier_name",
+                            "field": "0",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_products",
+                            "field": "1",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_value",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "avg_price",
+                            "field": "3",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 2.009ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT supplier_name, total_products, total_value, avg_price\n  FROM (\n      SELECT s.supplier_id,\n             s.supplier_name,\n             COUNT(p.product_id) AS total_products,\n             COALESCE(SUM(p.product_price), 0) AS total_value,\n             COALESCE(AVG(p.product_price), 0) AS avg_price\n      FROM Suppliers s\n      LEFT JOIN Products p ON s.supplier_id = p.supplier_id\n      GROUP BY s.supplier_id, s.supplier_name\n  ) AS supplier_stats\n  WHERE total_products > 0\n  ORDER BY total_value DESC",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 160,
+                "end": 174,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "64cbabc2-0bcc-4418-ca22-7404bec3dab3"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 632
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "64cbabc2-0bcc-4418-ca22-7404bec3dab3",
+                    "rows": [
+                        {
+                            "0": "2024-01",
+                            "1": 2,
+                            "2": 2,
+                            "3": "309.910000"
+                        },
+                        {
+                            "0": "2024-02",
+                            "1": 1,
+                            "2": 1,
+                            "3": "659.990000"
+                        },
+                        {
+                            "0": "2024-03",
+                            "1": 3,
+                            "2": 3,
+                            "3": "272.823333"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "order_month",
+                            "field": "0",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_count",
+                            "field": "1",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_orders",
+                            "field": "2",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "avg_order_value",
+                            "field": "3",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 7.241ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT order_month, customer_count, total_orders, avg_order_value\n  FROM (\n      SELECT DATE_FORMAT(o.order_date, '%Y-%m') AS order_month,\n             COUNT(DISTINCT o.customer_id) AS customer_count,\n             COUNT(o.order_id) AS total_orders,\n             AVG(order_totals.order_total) AS avg_order_value\n      FROM Orders o\n      INNER JOIN (\n          SELECT order_id, SUM(quantity * item_price) AS order_total\n          FROM Order_Items\n          GROUP BY order_id\n      ) AS order_totals ON o.order_id = order_totals.order_id\n      GROUP BY DATE_FORMAT(o.order_date, '%Y-%m')\n  ) AS monthly_summary\n  ORDER BY order_month",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 175,
+                "end": 180,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "683d0a1b-5b37-4470-f357-2ef69676df12"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 203
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "683d0a1b-5b37-4470-f357-2ef69676df12",
+                    "rows": [
+                        {
+                            "0": 8,
+                            "1": "ECO",
+                            "2": "34.75",
+                            "3": 8
+                        },
+                        {
+                            "0": 2,
+                            "1": "CLOTHING",
+                            "2": "79.95",
+                            "3": 2
+                        },
+                        {
+                            "0": 6,
+                            "1": "KITCHEN",
+                            "2": "89.50",
+                            "3": 6
+                        },
+                        {
+                            "0": 5,
+                            "1": "SPORTS",
+                            "2": "129.99",
+                            "3": 5
+                        },
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99",
+                            "3": 1
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00",
+                            "3": 4
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99",
+                            "3": 1
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "supplier_id",
+                            "field": "3",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 0.964ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price, supplier_id\n  FROM Products\n  WHERE product_price > ALL (\n      SELECT product_price FROM Products WHERE supplier_id = 3\n  )\n  ORDER BY product_price",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 181,
+                "end": 187,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "60d7098a-f3de-42b1-b1c5-8bf01be45fa0"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 249
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "60d7098a-f3de-42b1-b1c5-8bf01be45fa0",
+                    "rows": [
+                        {
+                            "0": 10,
+                            "1": "BOOKS",
+                            "2": "19.99"
+                        },
+                        {
+                            "0": 3,
+                            "1": "BOOKS",
+                            "2": "24.99"
+                        },
+                        {
+                            "0": 8,
+                            "1": "ECO",
+                            "2": "34.75"
+                        },
+                        {
+                            "0": 2,
+                            "1": "CLOTHING",
+                            "2": "79.95"
+                        },
+                        {
+                            "0": 6,
+                            "1": "KITCHEN",
+                            "2": "89.50"
+                        },
+                        {
+                            "0": 5,
+                            "1": "SPORTS",
+                            "2": "129.99"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 1.199ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_price < ANY (\n      SELECT product_price FROM Products WHERE product_type_code = 'ELECTRONICS'\n  )\n  AND product_type_code != 'ELECTRONICS'\n  ORDER BY product_price",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 188,
+                "end": 198,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "31c82182-94aa-48a4-bc92-a4f6471de09c"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 499
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "31c82182-94aa-48a4-bc92-a4f6471de09c",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": 2
+                        },
+                        {
+                            "0": 5,
+                            "1": "David Lee",
+                            "2": 2
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "supplier_count",
+                            "field": "2",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 2 records retrieved in 1.032ms"
+                    },
+                    "totalRowCount": 2,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT c.customer_id, c.customer_name, supplier_count\n  FROM Customers c\n  INNER JOIN (\n      SELECT o.customer_id, COUNT(DISTINCT p.supplier_id) AS supplier_count\n      FROM Orders o\n      INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n      INNER JOIN Products p ON oi.product_id = p.product_id\n      GROUP BY o.customer_id\n      HAVING COUNT(DISTINCT p.supplier_id) > 1\n  ) AS multi_supplier_customers ON c.customer_id = multi_supplier_customers.customer_id\n  ORDER BY supplier_count DESC",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 199,
+                "end": 205,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "f893381e-64c1-4eb8-b111-096287cc5535"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 220
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "f893381e-64c1-4eb8-b111-096287cc5535",
+                    "rows": [
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 0.951ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_price = (\n      SELECT MAX(product_price)\n      FROM Products\n      WHERE product_price < (SELECT MAX(product_price) FROM Products)\n  )",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 206,
+                "end": 212,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "60186ef9-0bbb-4aeb-b33b-3020bc21d551"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 227
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "60186ef9-0bbb-4aeb-b33b-3020bc21d551",
+                    "rows": [
+                        {
+                            "0": 2,
+                            "1": "CLOTHING",
+                            "2": "79.95"
+                        },
+                        {
+                            "0": 3,
+                            "1": "BOOKS",
+                            "2": "24.99"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00"
+                        },
+                        {
+                            "0": 5,
+                            "1": "SPORTS",
+                            "2": "129.99"
+                        },
+                        {
+                            "0": 6,
+                            "1": "KITCHEN",
+                            "2": "89.50"
+                        },
+                        {
+                            "0": 8,
+                            "1": "ECO",
+                            "2": "34.75"
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 0.935ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT p1.product_id, p1.product_type_code, p1.product_price\n  FROM Products p1\n  WHERE p1.product_price = (\n      SELECT MAX(p2.product_price)\n      FROM Products p2\n      WHERE p2.product_type_code = p1.product_type_code\n  )",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 213,
+                "end": 230,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "660c7bd1-6162-4bca-e28e-86bc2bde799b"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 664
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "660c7bd1-6162-4bca-e28e-86bc2bde799b",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": "1039.96"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": "449.00"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_total",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 2 records retrieved in 2.095ms"
+                    },
+                    "totalRowCount": 2,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT c.customer_id, c.customer_name, customer_total\n  FROM Customers c\n  INNER JOIN (\n      SELECT o.customer_id, SUM(oi.quantity * oi.item_price) AS customer_total\n      FROM Orders o\n      INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n      GROUP BY o.customer_id\n  ) AS customer_totals ON c.customer_id = customer_totals.customer_id\n  WHERE customer_total > (\n      SELECT AVG(total)\n      FROM (\n          SELECT o.customer_id, SUM(oi.quantity * oi.item_price) AS total\n          FROM Orders o\n          INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n          GROUP BY o.customer_id\n      ) AS avg_spending\n  )\n  ORDER BY customer_total DESC",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 231,
+                "end": 235,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "75f8a224-96e2-445f-8710-d09e40aeae67"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 176
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "75f8a224-96e2-445f-8710-d09e40aeae67",
+                    "rows": [
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00"
+                        },
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 0.856ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price\n  FROM Products\n  WHERE product_id IN (SELECT DISTINCT product_id FROM Order_Items)\n  ORDER BY product_price DESC\n  LIMIT 3",
+                    "updatable": true,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 236,
+                "end": 241,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "74f556fe-08a1-4c20-b569-1a6a1e3c276b"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 260
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "74f556fe-08a1-4c20-b569-1a6a1e3c276b",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": 2
+                        },
+                        {
+                            "0": 2,
+                            "1": "Sarah Johnson",
+                            "2": 1
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": 1
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "order_count",
+                            "field": "2",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 1.05ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT customer_id, customer_name,\n         (SELECT COUNT(*) FROM Orders o WHERE o.customer_id = c.customer_id) AS order_count\n  FROM Customers c\n  WHERE EXISTS (SELECT 1 FROM Orders o WHERE o.customer_id = c.customer_id)\n  ORDER BY order_count DESC\n  LIMIT 3",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 242,
+                "end": 249,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "82445bd3-0652-4826-8dfa-ef9dc0a739e6"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 550
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "82445bd3-0652-4826-8dfa-ef9dc0a739e6",
+                    "rows": [
+                        {
+                            "0": 8,
+                            "1": "ECO",
+                            "2": "34.75",
+                            "3": "0"
+                        },
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99",
+                            "3": "1"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00",
+                            "3": "1"
+                        },
+                        {
+                            "0": 6,
+                            "1": "KITCHEN",
+                            "2": "89.50",
+                            "3": "1"
+                        },
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99",
+                            "3": "1"
+                        },
+                        {
+                            "0": 10,
+                            "1": "BOOKS",
+                            "2": "19.99",
+                            "3": "1"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "units_sold",
+                            "field": "3",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 6 records retrieved in 4.101ms"
+                    },
+                    "totalRowCount": 6,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT p.product_id, p.product_type_code, p.product_price,\n         COALESCE((SELECT SUM(quantity) FROM Order_Items oi WHERE oi.product_id = p.product_id), 0) AS units_sold\n  FROM Products p\n  WHERE COALESCE((SELECT SUM(quantity) FROM Order_Items oi WHERE oi.product_id = p.product_id), 0) <\n        (SELECT AVG(total_qty)\n         FROM (SELECT product_id, SUM(quantity) AS total_qty FROM Order_Items GROUP BY product_id) AS product_sales)\n        OR NOT EXISTS (SELECT 1 FROM Order_Items oi WHERE oi.product_id = p.product_id)\n  ORDER BY units_sold",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 250,
+                "end": 270,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "3351d6a3-1f51-4c60-af57-0629daf354f6"
+                    ]
+                },
+                "currentHeight": 114.59375,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 653
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "3351d6a3-1f51-4c60-af57-0629daf354f6",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": "1039.96"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": "449.00"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_spending",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 2 records retrieved in 12.469ms"
+                    },
+                    "totalRowCount": 2,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "WITH customer_spending AS (\n    SELECT o.customer_id, SUM(oi.quantity * oi.item_price) AS total_spending\n    FROM Orders o\n    INNER JOIN Order_Items oi ON o.order_id = oi.order_id\n    GROUP BY o.customer_id\n),\nranked_spending AS (\n    SELECT \n        total_spending,\n        PERCENT_RANK() OVER (ORDER BY total_spending) AS percentile\n    FROM customer_spending\n)\nSELECT c.customer_id, c.customer_name, cs.total_spending\nFROM Customers c\nINNER JOIN customer_spending cs ON c.customer_id = cs.customer_id\nWHERE cs.total_spending >= (\n    SELECT MIN(total_spending)\n    FROM ranked_spending\n    WHERE percentile >= 0.75\n)\nORDER BY cs.total_spending DESC",
+                    "updatable": false
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 271,
+                "end": 277,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "c6a30c10-7223-40ac-d89a-ff54bd0ebcd2"
+                    ]
+                },
+                "currentHeight": 138.390625,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 249
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "76c21e27-da22-4dc1-8c33-665cf598e828",
+                    "resultId": "c6a30c10-7223-40ac-d89a-ff54bd0ebcd2",
+                    "rows": [
+                        {
+                            "0": 9,
+                            "1": "ELECTRONICS",
+                            "2": "659.99",
+                            "3": "198.00"
+                        },
+                        {
+                            "0": 4,
+                            "1": "FURNITURE",
+                            "2": "449.00",
+                            "3": "134.70"
+                        },
+                        {
+                            "0": 1,
+                            "1": "ELECTRONICS",
+                            "2": "329.99",
+                            "3": "99.00"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_type_code",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "estimated_profit",
+                            "field": "3",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 1.795ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, product_type_code, product_price,\n         ROUND(product_price * 0.3, 2) AS estimated_profit\n  FROM Products\n  WHERE product_price * 0.3 > (\n      SELECT AVG(product_price * 0.3) FROM Products\n  )\n  ORDER BY estimated_profit DESC",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 278,
+                "end": 278,
+                "language": "mysql",
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 0
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": []
+        }
+    ]
+}
