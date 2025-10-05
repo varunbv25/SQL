@@ -521,7 +521,3 @@ Successfully created modular SQL logic that can be:
 - `Order_Items` - Line items for orders
 - `Products` - Product catalog
 - `Suppliers` - Supplier information
-
-## Tools
-- MySQL Workbench / Database Client
-- MySQL 8.0+ (for stored procedure and function support)

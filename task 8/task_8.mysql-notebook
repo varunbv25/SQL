@@ -2,7 +2,7 @@
     "type": "MySQLNotebook",
     "version": "1.0",
     "caption": "DB Notebook",
-    "content": "\\about\n",
+    "content": "\\about\nuse ecommerce;\nDELIMITER $$\n  CREATE PROCEDURE AddNewOrder(\n      IN p_customer_id INT,\n      IN p_order_date DATE,\n      IN p_order_status VARCHAR(50),\n      OUT p_order_id INT\n  )\n  BEGIN\n      IF EXISTS (SELECT 1 FROM Customers WHERE customer_id = p_customer_id) THEN\n          -- Get next order ID\n          SELECT IFNULL(MAX(order_id), 0) + 1 INTO p_order_id FROM Orders;\n\n          -- Insert new order\n          INSERT INTO Orders (order_id, customer_id, order_date, order_status)\n          VALUES (p_order_id, p_customer_id, p_order_date, p_order_status);\n\n          SELECT CONCAT('Order ', p_order_id, ' created successfully') AS message;\n      ELSE\n          SET p_order_id = -1;\n          SELECT 'Error: Customer does not exist' AS message;\n      END IF;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE FUNCTION GetOrderTotal(p_order_id INT)\n  RETURNS DECIMAL(10,2)\n  DETERMINISTIC\n  BEGIN\n      DECLARE total_amount DECIMAL(10,2);\n\n      SELECT IFNULL(SUM(quantity * item_price), 0)\n      INTO total_amount\n      FROM Order_Items\n      WHERE order_id = p_order_id;\n\n      RETURN total_amount;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE PROCEDURE UpdateProductPrice(\n      IN p_product_id INT,\n      IN p_percentage DECIMAL(5,2)\n  )\n  BEGIN\n      DECLARE v_old_price DECIMAL(10,2);\n      DECLARE v_new_price DECIMAL(10,2);\n\n      -- Get current price\n      SELECT product_price INTO v_old_price\n      FROM Products\n      WHERE product_id = p_product_id;\n\n      -- Calculate new price\n      SET v_new_price = v_old_price * (1 + p_percentage / 100);\n\n      -- Update price\n      UPDATE Products\n      SET product_price = v_new_price\n      WHERE product_id = p_product_id;\n\n      SELECT p_product_id AS product_id,\n             v_old_price AS old_price,\n             v_new_price AS new_price,\n             p_percentage AS percentage_change;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE FUNCTION GetCustomerOrderCount(p_customer_id INT)\n  RETURNS INT\n  DETERMINISTIC\n  BEGIN\n      DECLARE order_count INT;\n\n      SELECT COUNT(*)\n      INTO order_count\n      FROM Orders\n      WHERE customer_id = p_customer_id;\n\n      RETURN order_count;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE PROCEDURE GetCustomerPurchaseSummary(IN p_customer_id INT)\n  BEGIN\n      SELECT\n          c.customer_id,\n          c.customer_name,\n          c.customer_email,\n          COUNT(DISTINCT o.order_id) AS total_orders,\n          IFNULL(SUM(oi.quantity * oi.item_price), 0) AS total_spent,\n          IFNULL(AVG(oi.quantity * oi.item_price), 0) AS avg_order_value\n      FROM Customers c\n      LEFT JOIN Orders o ON c.customer_id = o.customer_id\n      LEFT JOIN Order_Items oi ON o.order_id = oi.order_id\n      WHERE c.customer_id = p_customer_id\n      GROUP BY c.customer_id, c.customer_name, c.customer_email;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE PROCEDURE CancelOrder(IN p_order_id INT)\n  BEGIN\n      DECLARE v_order_status VARCHAR(50);\n\n      -- Get current order status\n      SELECT order_status INTO v_order_status\n      FROM Orders\n      WHERE order_id = p_order_id;\n\n      -- Check if order can be cancelled\n      IF v_order_status IS NULL THEN\n          SELECT 'Error: Order does not exist' AS message;\n      ELSEIF v_order_status = 'Delivered' THEN\n          SELECT 'Error: Cannot cancel delivered order' AS message;\n      ELSEIF v_order_status = 'Cancelled' THEN\n          SELECT 'Warning: Order is already cancelled' AS message;\n      ELSE\n          UPDATE Orders\n          SET order_status = 'Cancelled'\n          WHERE order_id = p_order_id;\n\n          SELECT CONCAT('Order ', p_order_id, ' has been cancelled') AS message;\n      END IF;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE FUNCTION IsProductAvailable(p_product_id INT)\n  RETURNS VARCHAR(20)\n  DETERMINISTIC\n  BEGIN\n      DECLARE product_exists INT;\n\n      SELECT COUNT(*) INTO product_exists\n      FROM Products\n      WHERE product_id = p_product_id;\n\n      IF product_exists = 0 THEN\n          RETURN 'Not Found';\n      ELSE\n          RETURN 'Available';\n      END IF;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE PROCEDURE GetTopCustomers(IN p_limit INT)\n  BEGIN\n      SELECT\n          c.customer_id,\n          c.customer_name,\n          c.customer_email,\n          COUNT(DISTINCT o.order_id) AS total_orders,\n          IFNULL(SUM(oi.quantity * oi.item_price), 0) AS total_spent\n      FROM Customers c\n      LEFT JOIN Orders o ON c.customer_id = o.customer_id\n      LEFT JOIN Order_Items oi ON o.order_id = oi.order_id\n      GROUP BY c.customer_id, c.customer_name, c.customer_email\n      HAVING total_spent > 0\n      ORDER BY total_spent DESC\n      LIMIT p_limit;\n  END$$\n  DELIMITER ;\nDELIMITER $$\n  CREATE FUNCTION GetSupplierProductCount(p_supplier_id INT)\n  RETURNS INT\n  DETERMINISTIC\n  BEGIN\n      DECLARE product_count INT;\n\n      SELECT COUNT(*)\n      INTO product_count\n      FROM Products\n      WHERE supplier_id = p_supplier_id;\n\n      RETURN product_count;\n  END$$\n  DELIMITER ;\nCALL AddNewOrder(1, '2024-10-05', 'Processing', @new_order_id);\nSELECT @new_order_id AS created_order_id;\nSELECT GetOrderTotal(1) AS order_total;\nCALL UpdateProductPrice(1, 10.00);\nSELECT GetCustomerOrderCount(1) AS order_count;\nCALL CancelOrder(4);\nSELECT product_id, IsProductAvailable(product_id) AS availability\n  FROM Products\n  LIMIT 5;\nCALL GetTopCustomers(3);\nSELECT supplier_id, supplier_name,\n         GetSupplierProductCount(supplier_id) AS product_count\n  FROM Suppliers;\n",
     "options": {
         "tabSize": 4,
         "indentSize": 4,
@@ -15,11 +15,11 @@
             {
                 "inSelectionMode": false,
                 "selectionStart": {
-                    "lineNumber": 2,
+                    "lineNumber": 191,
                     "column": 1
                 },
                 "position": {
-                    "lineNumber": 2,
+                    "lineNumber": 191,
                     "column": 1
                 }
             }
@@ -27,10 +27,10 @@
         "viewState": {
             "scrollLeft": 0,
             "firstPosition": {
-                "lineNumber": 1,
+                "lineNumber": 188,
                 "column": 1
             },
-            "firstPositionDeltaTop": 0
+            "firstPositionDeltaTop": 50
         },
         "contributionsState": {
             "editor.contrib.folding": {},
@@ -53,7 +53,7 @@
                         }
                     ]
                 },
-                "currentHeight": 118.390625,
+                "currentHeight": 28,
                 "currentSet": 1,
                 "statements": [
                     {
@@ -73,6 +73,1480 @@
             "state": {
                 "start": 2,
                 "end": 2,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 0,
+                            "resultId": "62d93a40-003d-48e4-f95e-0cdad261a8c4",
+                            "content": "OK, 0 records retrieved in 1.502ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 14
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 3,
+                "end": 25,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "277b705a-7372-4295-ca4a-c06b07afc1fb",
+                            "content": "OK, 0 records retrieved in 33.576ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 745
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 757,
+                            "length": 14
+                        },
+                        "contentStart": 760,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 26,
+                "end": 40,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "fe71c981-63a2-4071-d193-e842abf84a82",
+                            "content": "OK, 0 records retrieved in 16.306ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 308
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 320,
+                            "length": 14
+                        },
+                        "contentStart": 323,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 41,
+                "end": 68,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "883eb0ba-1618-4151-bb49-bf160b489cb9",
+                            "content": "OK, 0 records retrieved in 20.215ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 718
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 730,
+                            "length": 14
+                        },
+                        "contentStart": 733,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 69,
+                "end": 83,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "8bc8aa30-a23f-48ae-a813-267e82c0a43f",
+                            "content": "OK, 0 records retrieved in 17.337ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 268
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 280,
+                            "length": 14
+                        },
+                        "contentStart": 283,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 84,
+                "end": 100,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "94e2e7ff-2a89-4c95-edaa-f0c64fc08ab4",
+                            "content": "OK, 0 records retrieved in 19.566ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 621
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 633,
+                            "length": 14
+                        },
+                        "contentStart": 636,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 101,
+                "end": 126,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "3f4fa671-792c-42ed-b4aa-430f27a6afbd",
+                            "content": "OK, 0 records retrieved in 18.322ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 820
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 832,
+                            "length": 14
+                        },
+                        "contentStart": 835,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 127,
+                "end": 144,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "abc32685-5a45-40b2-8682-444f3454474b",
+                            "content": "OK, 0 records retrieved in 15.381ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 364
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 376,
+                            "length": 14
+                        },
+                        "contentStart": 379,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 145,
+                "end": 162,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "e6fcbd91-cf6d-4857-f7fb-38f538e1936d",
+                            "content": "OK, 0 records retrieved in 19.783ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 569
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 581,
+                            "length": 14
+                        },
+                        "contentStart": 584,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 163,
+                "end": 177,
+                "language": "mysql",
+                "result": {
+                    "type": "text",
+                    "text": [
+                        {
+                            "type": 2,
+                            "index": 1,
+                            "resultId": "fccbe53f-f283-4411-dc82-b72e2a4feb25",
+                            "content": "OK, 0 records retrieved in 17.94ms"
+                        }
+                    ]
+                },
+                "currentHeight": 28,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 0,
+                            "length": 12
+                        },
+                        "contentStart": 0,
+                        "state": 4
+                    },
+                    {
+                        "delimiter": "$$",
+                        "span": {
+                            "start": 12,
+                            "length": 278
+                        },
+                        "contentStart": 15,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 290,
+                            "length": 14
+                        },
+                        "contentStart": 293,
+                        "state": 4
+                    }
+                ]
+            },
+            "data": []
+        },
+        {
+            "state": {
+                "start": 178,
+                "end": 179,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "75450770-6278-47d5-8dd9-dbc5fd69cdfa",
+                        "6aabb446-7c99-4a54-955a-39a1863559e8",
+                        "96b95aea-9077-4d16-b883-d835d7d69b40"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 63
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 63,
+                            "length": 42
+                        },
+                        "contentStart": 64,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "75450770-6278-47d5-8dd9-dbc5fd69cdfa",
+                    "rows": [
+                        {
+                            "0": "Order 7 created successfully"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "message",
+                            "field": "0",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 59.919ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 0,
+                    "sql": "CALL AddNewOrder(1, '2024-10-05', 'Processing', @new_order_id)",
+                    "updatable": false
+                },
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "6aabb446-7c99-4a54-955a-39a1863559e8",
+                    "rows": [
+                        {
+                            "0": 7
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "created_order_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 0.639ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 1,
+                    "sql": "\nSELECT @new_order_id AS created_order_id",
+                    "updatable": false,
+                    "fullTableName": ""
+                },
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "96b95aea-9077-4d16-b883-d835d7d69b40",
+                    "rows": [],
+                    "columns": [
+                        {
+                            "title": "*",
+                            "field": "0",
+                            "dataType": {
+                                "type": 0
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 0 records retrieved in 59.919ms"
+                    },
+                    "totalRowCount": 0,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 1,
+                    "sql": "CALL AddNewOrder(1, '2024-10-05', 'Processing', @new_order_id)",
+                    "updatable": false
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 180,
+                "end": 180,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "aa014d10-6f6b-4d14-ce3e-b21e5708c46e"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 39
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "aa014d10-6f6b-4d14-ce3e-b21e5708c46e",
+                    "rows": [
+                        {
+                            "0": "379.97"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "order_total",
+                            "field": "0",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 18.001ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT GetOrderTotal(1) AS order_total",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 181,
+                "end": 181,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "ee7ecc94-e9bb-4bde-ba5a-793bffb4ab61",
+                        "a7aaf658-1c60-409a-b036-cab413bbf906"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 34
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "ee7ecc94-e9bb-4bde-ba5a-793bffb4ab61",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "329.99",
+                            "2": "362.99",
+                            "3": "10.00"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "old_price",
+                            "field": "1",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "new_price",
+                            "field": "2",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "percentage_change",
+                            "field": "3",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 24.655ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 0,
+                    "sql": "CALL UpdateProductPrice(1, 10.00)",
+                    "updatable": false
+                },
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "a7aaf658-1c60-409a-b036-cab413bbf906",
+                    "rows": [],
+                    "columns": [
+                        {
+                            "title": "*",
+                            "field": "0",
+                            "dataType": {
+                                "type": 0
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 0 records retrieved in 24.655ms"
+                    },
+                    "totalRowCount": 0,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 1,
+                    "sql": "CALL UpdateProductPrice(1, 10.00)",
+                    "updatable": false
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 182,
+                "end": 182,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "9cbe6883-1023-4c67-8968-341d30a337ee"
+                    ]
+                },
+                "currentHeight": 90.796875,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 47
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "9cbe6883-1023-4c67-8968-341d30a337ee",
+                    "rows": [
+                        {
+                            "0": 3
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "order_count",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 1.309ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT GetCustomerOrderCount(1) AS order_count",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 183,
+                "end": 183,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "35a82b4e-556a-446e-8a59-1ba50f309baa",
+                        "3935dbe7-47ac-4d9d-846f-404ace5646e0"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 20
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "35a82b4e-556a-446e-8a59-1ba50f309baa",
+                    "rows": [
+                        {
+                            "0": "Order 4 has been cancelled"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "message",
+                            "field": "0",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 1 record retrieved in 11.753ms"
+                    },
+                    "totalRowCount": 1,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 0,
+                    "sql": "CALL CancelOrder(4)",
+                    "updatable": false
+                },
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "3935dbe7-47ac-4d9d-846f-404ace5646e0",
+                    "rows": [],
+                    "columns": [
+                        {
+                            "title": "*",
+                            "field": "0",
+                            "dataType": {
+                                "type": 0
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 0 records retrieved in 11.753ms"
+                    },
+                    "totalRowCount": 0,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 1,
+                    "sql": "CALL CancelOrder(4)",
+                    "updatable": false
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 184,
+                "end": 186,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "53aa7df1-d886-4fe0-f2c0-588b7d0f615f"
+                    ]
+                },
+                "currentHeight": 36,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 92
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    },
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 92,
+                            "length": 0
+                        },
+                        "contentStart": 91,
+                        "state": 3
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "53aa7df1-d886-4fe0-f2c0-588b7d0f615f",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "Available"
+                        },
+                        {
+                            "0": 9,
+                            "1": "Available"
+                        },
+                        {
+                            "0": 2,
+                            "1": "Available"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Available"
+                        },
+                        {
+                            "0": 10,
+                            "1": "Available"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "product_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "availability",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 5 records retrieved in 1.854ms"
+                    },
+                    "totalRowCount": 5,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT product_id, IsProductAvailable(product_id) AS availability\n  FROM Products\n  LIMIT 5",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 187,
+                "end": 187,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "751ba99e-fb39-414f-fbd9-8c791146ff75",
+                        "cb92991a-bb9b-4e80-87b2-2b7cf4242bcc"
+                    ]
+                },
+                "currentHeight": 165.390625,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 24
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "751ba99e-fb39-414f-fbd9-8c791146ff75",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "John Smith",
+                            "2": "john.smith@email.com",
+                            "3": 3,
+                            "4": "1039.96"
+                        },
+                        {
+                            "0": 3,
+                            "1": "Michael Brown",
+                            "2": "mbrown@newcompany.com",
+                            "3": 1,
+                            "4": "449.00"
+                        },
+                        {
+                            "0": 5,
+                            "1": "David Lee",
+                            "2": "david.lee@techstart.com",
+                            "3": 1,
+                            "4": "349.48"
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "customer_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "customer_email",
+                            "field": "2",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_orders",
+                            "field": "3",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "total_spent",
+                            "field": "4",
+                            "dataType": {
+                                "type": 10,
+                                "flags": [
+                                    "UNSIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 65,
+                                "numericScale": 30,
+                                "parameterFormatType": "TwoOrOneOrZero",
+                                "synonyms": [
+                                    "FIXED",
+                                    "NUMERIC",
+                                    "DEC"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 3 records retrieved in 2.024ms"
+                    },
+                    "totalRowCount": 3,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 0,
+                    "sql": "CALL GetTopCustomers(3)",
+                    "updatable": false
+                },
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "cb92991a-bb9b-4e80-87b2-2b7cf4242bcc",
+                    "rows": [],
+                    "columns": [
+                        {
+                            "title": "*",
+                            "field": "0",
+                            "dataType": {
+                                "type": 0
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 0 records retrieved in 2.024ms"
+                    },
+                    "totalRowCount": 0,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "subIndex": 1,
+                    "sql": "CALL GetTopCustomers(3)",
+                    "updatable": false
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 188,
+                "end": 190,
+                "language": "mysql",
+                "result": {
+                    "type": "resultIds",
+                    "list": [
+                        "a20a55bf-25ea-48f0-cdc1-03e7ea77f185"
+                    ]
+                },
+                "currentHeight": 233.59375,
+                "currentSet": 1,
+                "statements": [
+                    {
+                        "delimiter": ";",
+                        "span": {
+                            "start": 0,
+                            "length": 115
+                        },
+                        "contentStart": 0,
+                        "state": 0
+                    }
+                ]
+            },
+            "data": [
+                {
+                    "tabId": "e4193b01-04f8-4222-a7f1-f4a8c60a33d0",
+                    "resultId": "a20a55bf-25ea-48f0-cdc1-03e7ea77f185",
+                    "rows": [
+                        {
+                            "0": 1,
+                            "1": "TechCorp Electronics",
+                            "2": 2
+                        },
+                        {
+                            "0": 2,
+                            "1": "Global Fashion Ltd",
+                            "2": 1
+                        },
+                        {
+                            "0": 3,
+                            "1": "BookWorld Publishing",
+                            "2": 2
+                        },
+                        {
+                            "0": 4,
+                            "1": "HomeComfort Inc",
+                            "2": 1
+                        },
+                        {
+                            "0": 5,
+                            "1": "Sports Equipment Co",
+                            "2": 1
+                        },
+                        {
+                            "0": 6,
+                            "1": "Kitchen Essentials Ltd",
+                            "2": 1
+                        },
+                        {
+                            "0": 8,
+                            "1": "Eco-Friendly Products",
+                            "2": 1
+                        }
+                    ],
+                    "columns": [
+                        {
+                            "title": "supplier_id",
+                            "field": "0",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "supplier_name",
+                            "field": "1",
+                            "dataType": {
+                                "type": 17,
+                                "characterMaximumLength": 65535,
+                                "flags": [
+                                    "BINARY",
+                                    "ASCII",
+                                    "UNICODE"
+                                ],
+                                "needsQuotes": true,
+                                "parameterFormatType": "OneOrZero"
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        },
+                        {
+                            "title": "product_count",
+                            "field": "2",
+                            "dataType": {
+                                "type": 4,
+                                "flags": [
+                                    "SIGNED",
+                                    "ZEROFILL"
+                                ],
+                                "numericPrecision": 10,
+                                "parameterFormatType": "OneOrZero",
+                                "synonyms": [
+                                    "INTEGER",
+                                    "INT4"
+                                ]
+                            },
+                            "inPK": false,
+                            "nullable": false,
+                            "autoIncrement": false
+                        }
+                    ],
+                    "executionInfo": {
+                        "text": "OK, 7 records retrieved in 16.438ms"
+                    },
+                    "totalRowCount": 7,
+                    "hasMoreRows": false,
+                    "currentPage": 0,
+                    "index": 0,
+                    "sql": "SELECT supplier_id, supplier_name,\n         GetSupplierProductCount(supplier_id) AS product_count\n  FROM Suppliers",
+                    "updatable": false,
+                    "fullTableName": ""
+                }
+            ]
+        },
+        {
+            "state": {
+                "start": 191,
+                "end": 191,
                 "language": "mysql",
                 "currentSet": 1,
                 "statements": [
